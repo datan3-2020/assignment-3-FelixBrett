@@ -1,7 +1,7 @@
 ---
 title: "Statistical assignment 3"
-author: "[add your name here] [add your candidate number here - mandatory]"
-date: "[add date here]"
+author: "Felix Brett 109306"
+date: "18/02/2020"
 output: github_document
 ---
 
@@ -24,8 +24,9 @@ First we want to read and join the data for the first 7 waves of the Understandi
 The only thing you need to do for this code to work on your computer is to provide a path to the directory where the data are stored on your computer.
 
 ```{r}
-library(tidyverse)
-library(data.table)
+library("tidyverse")
+install.packages("data.table")
+library("data.table")
 
 # data.table is faster compared to readr so we'll use it in this case (the function fread()). You need to install this package first to be able to run this code.
 
@@ -33,7 +34,7 @@ library(data.table)
 
 files <- dir(
              # Select the folder where the files are stored.
-             "[add your path here]",
+             "C:/Users/F/Documents/Politics and International relations/Data Analysis in Social Science III/UKDA-6614-tab/tab",
              # Tell R which pattern you want present in the files it will display.
              pattern = "indresp",
              # We want this process to repeat through the entire folder.
@@ -74,7 +75,9 @@ Now we have got the data from all 7 waves in the same data frame **all7** in the
 
 ```{r}
 Long <- all7 %>%
-  ...
+  gather(a_memorig:g_vote6, key = "variable", value = "value") %>%
+  separate(variable, into = c("wave", "variable"), sep = "_", extra = "merge") %>%
+  spread(key = variable, value = value)
 Long
 ```
 
@@ -84,14 +87,14 @@ Now we want to filter the data keeping only respondents from the original UKHLS 
 
 ```{r}
 Long <- Long %>%
-        filter(...) %>%
-        mutate(sex_dv = ...) %>%
-        mutate(vote6 = ...)
+        filter(memorig == 1) %>%
+        mutate(sex_dv = ifelse(sex_dv == 1, "male",
+                               ifelse(sex_dv == 2, "female", NA)),
+               vote6 = ifelse(vote6 < 0, NA, vote6))
 
-Long %>%
-        ...
-Long %>%
-        ...
+
+table(Long$sex_dv)
+table(Long$vote6)
 
 ```
 
@@ -101,9 +104,11 @@ Political interest is an ordinal variable, but we will treat it as interval and 
 
 ```{r}
 meanVote6 <- Long %>%
-        ...
-        
+  filter(!is.na(sex_dv)) %>%
+  group_by(sex_dv, wave) %>%
+  summarise(mean = mean(vote6, na.rm = TRUE))
 meanVote6
+
 ```
 
 ## Reshape the data frame with summary statistics (20 points)
@@ -120,8 +125,14 @@ In the cells of this table you should have mean political interest by sex and wa
 Write a short interpretation of your findings.
 
 ```{r}
-meanVote6 %>%
-        ...
+meanVote6_table <- meanVote6 %>%
+  spread(wave, mean)
+meanVote6_table
+
+# short interpretation of findings:
+
+# this table shows that women are consistently more  politically interested than men 
+
 ```
 
 ## Estimate stability of political interest (30 points)
@@ -147,6 +158,59 @@ Write the R code that does the following.
 5. Write a short interpretation of your findings.
 
 ```{r}
-...
+
+Long <- Long %>%
+  select(pidp, wave, memorig, sex_dv, vote6)
+
+# dissecting the age at wave 1 from the original all7 dataset to use later
+
+all7_age <- all7 %>%
+  select(pidp, a_age_dv)
+
+# converting the Long dataset to the wide format and adding only the age
+# at wave 1
+
+interest <- Long %>%
+      pivot_wider(names_from = wave, values_from = vote6) %>%
+  left_join(all7_age, by = "pidp")
+
+# removing all rows with incomplete waves (1)
+
+interest <- na.omit(interest)
+
+# calculating Delta for each individual (2)
+
+interest <- interest %>% 
+  mutate(Delta = abs(a - b) + abs(b - c) + abs(c - d) + abs(d - e) + abs(e - f) + abs(f - g))
+
+# calculating mean Delta for men and women (3)
+
+mean_Delta_sex <- interest %>%
+group_by(sex_dv) %>%
+  summarise(mean_Delta = mean(Delta, na.rm = TRUE))
+mean_Delta_sex
+
+# calculating mean Delta by age in years (4)
+
+mean_Delta_age <- interest %>%
+  group_by(a_age_dv) %>%
+  summarise(mean_Delta = mean(Delta, na.rm = TRUE))
+mean_Delta_age
+
+# creating a graph to plot the relationship between age and mean_Delta
+
+ggplot(data = mean_Delta_age) +
+  geom_point(mapping = aes(x = a_age_dv, y = mean_Delta),
+             col = "red")
+
+# short interpretation of findings:
+
+# there is almost no difference between men and women in how stable their
+# involvement in politics is over the course of the study
+# the difference between men and women in the Delta score is insignificant
+# with mere 0.03 point difference between them (correct to 2 decimal places)
+
+# whereas the graph indicates that political interest becomes less stable
+# around the age of 60
 
 ```
